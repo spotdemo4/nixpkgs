@@ -83,11 +83,12 @@ let
     '';
 
   # The OCI Image specification recommends that configurations use values listed
-  # in the Go Language document for GOARCH.
+  # in the Go Language document for GOARCH & GOARM.
   # Reference: https://github.com/opencontainers/image-spec/blob/master/config.md#properties
-  # For the mapping from Nixpkgs system parameters to GOARCH, we can reuse the
+  # For the mapping from Nixpkgs system parameters to GOARCH & GOARM, we can reuse the
   # mapping from the go package.
   defaultArchitecture = go.GOARCH;
+  defaultVariant = lib.optionalString (go.GOARM != "") "v${go.GOARM}";
 
   compressors = {
     none = {
@@ -153,6 +154,8 @@ rec {
         os ? "linux",
         # Image architecture, defaults to the architecture of the `hostPlatform` when unset
         arch ? defaultArchitecture,
+        # Image variant, defaults to the variant of the `hostPlatform` when unset
+        variant ? defaultVariant,
         # This is used to set name to the pulled image
         finalImageName ? imageName,
         # This used to set a tag to the pulled image
@@ -185,6 +188,7 @@ rec {
             --tmpdir=$TMPDIR \
             --override-os ${os} \
             --override-arch ${arch} \
+            ${lib.optionalString (variant != "") "--override-variant ${variant}"} \
             copy \
             --src-tls-verify=${lib.boolToString tlsVerify} \
             "$sourceURL" "docker-archive://$out:$destNameTag" \
@@ -630,6 +634,8 @@ rec {
       config ? null,
       # Image architecture, defaults to the architecture of the `hostPlatform` when unset
       architecture ? defaultArchitecture,
+      # Image variant, defaults to the variant of the `hostPlatform` when unset
+      variant ? defaultVariant,
       # Optional bash script to run on the files prior to fixturizing the layer.
       extraCommands ? "",
       uid ? 0,
@@ -669,7 +675,7 @@ rec {
         let
           pure = writeText "${baseName}-config.json" (
             builtins.toJSON {
-              inherit created config architecture;
+              inherit created config architecture variant;
               preferLocalBuild = true;
               os = "linux";
             }
@@ -1005,6 +1011,7 @@ rec {
       contents ? [ ],
       config ? { },
       architecture ? defaultArchitecture,
+      variant ? defaultVariant,
       created ? "1970-01-01T00:00:01Z",
       mtime ? "1970-01-01T00:00:01Z",
       uid ? 0,
@@ -1048,7 +1055,7 @@ rec {
       streamScript = writePython3 "stream" { } ./stream_layered_image.py;
       baseJson = writeText "${baseName}-base.json" (
         builtins.toJSON {
-          inherit config architecture;
+          inherit config architecture variant;
           os = "linux";
         }
       );
